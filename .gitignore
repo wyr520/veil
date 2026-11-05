@@ -1,0 +1,23 @@
+/target
+**/*.rs.bk
+*.pem
+*.log
+.env
+
+# flutter
+/app/.dart_tool
+/app/build
+/app/.flutter-plugins
+/app/.flutter-plugins-dependencies
+/app/.packages
+/app/android
+/app/ios
+/app/macos
+/app/linux
+/app/windows
+/app/web
+
+# android
+/app-android/build
+/app-android/*.jks
+/app-android/*.idsig
