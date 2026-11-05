@@ -4,6 +4,10 @@
 *.log
 .env
 
+# python
+__pycache__/
+*.pyc
+
 # flutter
 /app/.dart_tool
 /app/build

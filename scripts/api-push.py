@@ -89,6 +89,32 @@ class Api:
             die(f"{method} {path} -> {e.code}: {detail}")
 
 
+
+def ensure_initialized(api: "Api", slug: str) -> str:
+    """The Git Data API refuses to create blobs in a repo with no commits.
+
+    Seed it with one commit through the Contents API (which does work on an
+    empty repo), then everything else can go through the fast path.
+    """
+    code, commits = api.call("GET", f"/repos/{slug}/commits?per_page=1", ok=(200, 409))
+    if code == 200 and commits:
+        return commits[0]["sha"]
+
+    print("repository is empty — seeding the first commit")
+    blob = git("cat-file", "-p", git("rev-parse", "HEAD:.gitignore").decode().strip())
+    api.call(
+        "PUT",
+        f"/repos/{slug}/contents/.gitignore",
+        {
+            "message": "chore: initialize repository",
+            "content": base64.b64encode(blob).decode(),
+            "branch": "main",
+        },
+    )
+    code, commits = api.call("GET", f"/repos/{slug}/commits?per_page=1")
+    return commits[0]["sha"]
+
+
 def git(*args: str) -> bytes:
     out = subprocess.run(["git", *args], capture_output=True)
     if out.returncode != 0:
@@ -102,6 +128,7 @@ def main() -> int:
     ap.add_argument("--private", action="store_true")
     ap.add_argument("--tag", default="v0.1.0")
     ap.add_argument("--branch", default="main")
+    ap.add_argument("--skip-tag", action="store_true", help="only move the branch")
     args = ap.parse_args()
 
     if subprocess.run(["git", "rev-parse", "--git-dir"], capture_output=True).returncode != 0:
@@ -131,6 +158,8 @@ def main() -> int:
         print(f"repository {slug} already exists — reusing it")
     else:
         print(f"created https://github.com/{slug}")
+
+    parent = ensure_initialized(api, slug)
 
     # ---- blobs ------------------------------------------------------------
     raw = git("ls-tree", "-r", "-z", "--full-tree", "HEAD")
@@ -163,24 +192,29 @@ def main() -> int:
     _, commit = api.call(
         "POST",
         f"/repos/{slug}/git/commits",
-        {"message": message, "tree": new_tree["sha"], "parents": []},
+        {"message": message, "tree": new_tree["sha"], "parents": [parent]},
     )
     print(f"commit {commit['sha'][:8]}")
 
     # ---- branch -----------------------------------------------------------
     code, _ = api.call(
-        "POST",
-        f"/repos/{slug}/git/refs",
-        {"ref": f"refs/heads/{args.branch}", "sha": commit["sha"]},
-        ok=(201, 422),
+        "PATCH",
+        f"/repos/{slug}/git/refs/heads/{args.branch}",
+        {"sha": commit["sha"], "force": False},
+        ok=(200, 422),
     )
     if code == 422:
         api.call(
-            "PATCH",
-            f"/repos/{slug}/git/refs/heads/{args.branch}",
-            {"sha": commit["sha"], "force": False},
+            "POST",
+            f"/repos/{slug}/git/refs",
+            {"ref": f"refs/heads/{args.branch}", "sha": commit["sha"]},
+            ok=(201, 422),
         )
     print(f"branch {args.branch} -> {commit['sha'][:8]}")
+
+    if args.skip_tag:
+        print(f"https://github.com/{slug}")
+        return 0
 
     # ---- tag + release build ---------------------------------------------
     api.call(
