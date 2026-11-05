@@ -1,0 +1,40 @@
+[Unit]
+Description=Veil proxy server
+Documentation=https://github.com/veil-proxy/veil
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=veil
+Group=veil
+ExecStart=/usr/local/bin/veil run --config /etc/veil/veil.toml
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+LimitNPROC=65535
+
+# --- hardening -------------------------------------------------------------
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+ReadWritePaths=/etc/veil /var/lib/veil
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# --- logging ---------------------------------------------------------------
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=veil
+
+[Install]
+WantedBy=multi-user.target

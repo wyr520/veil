@@ -1,0 +1,9 @@
+# Linux is the deployment target: every text file must land with LF endings,
+# otherwise `curl ... | bash` fails on `\r`.
+* text=auto eol=lf
+
+publish.sh text eol=lf
+
+*.png binary
+*.apk binary
+*.jks binary
